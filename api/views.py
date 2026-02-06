@@ -5,42 +5,19 @@ import openai
 from django.conf import settings
 from django.http import StreamingHttpResponse
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import AgentProfile, AgentProfileTool, AgentSession, AgentTool
 from .serializers import (
+    AgentChatRequestSerializer,
+    AgentProfileSerializer,
     AgentStreamRequestSerializer,
     AgentToolOutputSerializer,
-    AgentProfileSerializer,
     AgentToolSerializer,
-    ChatSerializer,
 )
 from .tools import tool_registry
-from rest_framework import viewsets
-
-class ChatView(APIView):
-    @swagger_auto_schema(request_body=ChatSerializer)
-    def post(self, request):
-        serializer = ChatSerializer(data=request.data)
-        if serializer.is_valid():
-            message = serializer.validated_data['message']
-            
-            try:
-                client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-                completion = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "user", "content": message}
-                    ]
-                )
-                response_text = completion.choices[0].message.content
-                return Response({'response': response_text}, status=status.HTTP_200_OK)
-            except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 def _sse_event(event: str, data: Dict[str, Any]) -> str:
@@ -56,6 +33,22 @@ def _event_to_dict(event: Any) -> Dict[str, Any]:
         return event.__dict__
     return {"type": "unknown", "data": str(event)}
 
+
+def _normalize_output_items(output: Any) -> List[Dict[str, Any]]:
+    if output is None:
+        return []
+    items = output if isinstance(output, list) else list(output)
+    normalized = []
+    for item in items:
+        if isinstance(item, dict):
+            normalized.append(item)
+        elif hasattr(item, "model_dump"):
+            normalized.append(item.model_dump())
+        elif hasattr(item, "__dict__"):
+            normalized.append(item.__dict__)
+        else:
+            normalized.append({"type": "unknown", "data": str(item)})
+    return normalized
 
 def _get_or_create_agent(user, agent_id: Optional[int]) -> AgentProfile:
     if agent_id:
@@ -323,3 +316,69 @@ class AgentToolOutputView(APIView):
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
         return response
+
+
+class AgentChatView(APIView):
+    @swagger_auto_schema(request_body=AgentChatRequestSerializer)
+    def post(self, request):
+        serializer = AgentChatRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        message = serializer.validated_data["message"]
+        agent_id = serializer.validated_data.get("agent_id")
+        session_id = serializer.validated_data.get("session_id")
+
+        try:
+            agent = _get_or_create_agent(request.user, agent_id)
+        except AgentProfile.DoesNotExist:
+            return Response({"error": "Agent not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if session_id:
+            try:
+                session = AgentSession.objects.get(id=session_id, agent=agent)
+            except AgentSession.DoesNotExist:
+                return Response(
+                    {"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            session = AgentSession.objects.create(
+                agent=agent,
+                owner=request.user if request.user.is_authenticated else None,
+            )
+
+        session.messages.create(role="user", content=message)
+
+        client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        tools = _build_tools(agent)
+
+        response = client.responses.create(
+            model=agent.model,
+            instructions=agent.system_prompt or None,
+            input=[{"role": "user", "content": message}],
+            tools=tools,
+            previous_response_id=session.previous_response_id or None,
+        )
+
+        output_text = ""
+        if hasattr(response, "output_text"):
+            output_text = response.output_text
+        normalized_output = _normalize_output_items(getattr(response, "output", []))
+        if not output_text:
+            for item in normalized_output:
+                if item.get("type") == "message":
+                    for part in item.get("content", []):
+                        if part.get("type") == "output_text":
+                            output_text += part.get("text", "")
+
+        session.previous_response_id = getattr(response, "id", "") or ""
+        session.last_output = normalized_output
+        session.save(update_fields=["previous_response_id", "last_output", "updated_at"])
+
+        if output_text:
+            session.messages.create(role="assistant", content=output_text)
+
+        return Response(
+            {"session_id": session.id, "response": output_text},
+            status=status.HTTP_200_OK,
+        )

@@ -3,23 +3,6 @@ from rest_framework import serializers
 from .models import AgentProfile, AgentTool
 
 
-class ChatSerializer(serializers.Serializer):
-    message = serializers.CharField(required=True, max_length=1000)
-
-
-class AgentStreamRequestSerializer(serializers.Serializer):
-    message = serializers.CharField(required=True, max_length=4000)
-    agent_id = serializers.IntegerField(required=False)
-    session_id = serializers.IntegerField(required=False)
-    auto_execute_tools = serializers.BooleanField(required=False, default=False)
-
-
-class AgentToolOutputSerializer(serializers.Serializer):
-    session_id = serializers.IntegerField(required=True)
-    call_id = serializers.CharField(required=True, max_length=200)
-    output = serializers.CharField(required=True)
-
-
 class AgentProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentProfile
@@ -49,3 +32,22 @@ class AgentToolSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "created_at"]
+
+
+class AgentStreamRequestSerializer(serializers.Serializer):
+    message = serializers.CharField(required=True, max_length=4000)
+    agent_id = serializers.IntegerField(required=False)
+    session_id = serializers.IntegerField(required=False)
+    auto_execute_tools = serializers.BooleanField(required=False, default=False)
+
+
+class AgentChatRequestSerializer(serializers.Serializer):
+    message = serializers.CharField(required=True, max_length=4000)
+    agent_id = serializers.IntegerField(required=False)
+    session_id = serializers.IntegerField(required=False)
+
+
+class AgentToolOutputSerializer(serializers.Serializer):
+    session_id = serializers.IntegerField(required=True)
+    call_id = serializers.CharField(required=True, max_length=200)
+    output = serializers.CharField(required=True)

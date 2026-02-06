@@ -15,7 +15,7 @@ def admin_dashboard(request):
             if agent_form.is_valid():
                 agent_form.save()
                 return redirect("admin-dashboard")
-        elif action == "create_tool":
+        if action == "create_tool":
             tool_form = AgentToolForm(request.POST, prefix="tool")
             if tool_form.is_valid():
                 tool_form.save()
@@ -36,7 +36,5 @@ def admin_dashboard(request):
 
 
 def message_playground(request):
-    context = {
-        "agents": AgentProfile.objects.order_by("name"),
-    }
+    context = {"agents": AgentProfile.objects.order_by("name")}
     return render(request, "message_playground.html", context)

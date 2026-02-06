@@ -96,6 +96,19 @@ Request:
 - Agent Profiles: `/api/agents/`
 - Agent Tools: `/api/tools/`
 
+### Agent Chat (Non-Streaming)
+
+POST `/api/agent/chat/`
+
+Request:
+```json
+{
+  "message": "Hello",
+  "agent_id": 1,
+  "session_id": 1
+}
+```
+
 ### Admin
 
 Use Django admin to manage agent profiles, tools, sessions, messages, and prompt templates.

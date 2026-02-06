@@ -47,7 +47,42 @@
 
       <section class="grid-2">
         <article>
-          <h2>Send Message</h2>
+          <h2>Non-Streaming Chat</h2>
+          <label>
+            Agent Profile
+            <select id="chatAgentSelect">
+              <option value="">Default</option>
+              {% for agent in agents %}
+              <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.model }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Agent ID (optional)
+            <input id="chatAgentId" type="number" placeholder="1" />
+          </label>
+          <label>
+            Session ID (optional)
+            <input id="chatSessionId" type="number" placeholder="1" />
+          </label>
+          <label>
+            Message
+            <textarea id="chatMessage" rows="4" placeholder="Ask something..."></textarea>
+          </label>
+          <button id="chatBtn">Send (JSON)</button>
+          <small class="muted">Posts to `/api/agent/chat/`.</small>
+        </article>
+        <article>
+          <h2>Chat Response</h2>
+          <div class="log">
+            <pre id="chatOutput"></pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid-2">
+        <article>
+          <h2>Send Message (Streaming)</h2>
           <label>
             Agent Profile
             <select id="agentSelect">
@@ -230,11 +265,45 @@
         await streamRequest(payload, "/api/agent/tool-output/");
       });
 
+      document.getElementById("chatBtn").addEventListener("click", async () => {
+        const payload = {
+          message: document.getElementById("chatMessage").value,
+        };
+        const chatAgentSelect = document.getElementById("chatAgentSelect");
+        const agentIdInput = document.getElementById("chatAgentId");
+        const agentId = agentIdInput.value || chatAgentSelect.value;
+        const sessionId = document.getElementById("chatSessionId").value;
+        if (agentId) payload.agent_id = Number(agentId);
+        if (sessionId) payload.session_id = Number(sessionId);
+
+        const response = await fetch("/api/agent/chat/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        document.getElementById("chatOutput").textContent = JSON.stringify(
+          data,
+          null,
+          2
+        );
+      });
+
       const agentSelect = document.getElementById("agentSelect");
       const agentIdInput = document.getElementById("agentId");
       if (agentSelect && agentIdInput) {
         agentSelect.addEventListener("change", () => {
           agentIdInput.value = agentSelect.value || "";
+        });
+      }
+      const chatAgentSelect = document.getElementById("chatAgentSelect");
+      const chatAgentIdInput = document.getElementById("chatAgentId");
+      if (chatAgentSelect && chatAgentIdInput) {
+        chatAgentSelect.addEventListener("change", () => {
+          chatAgentIdInput.value = chatAgentSelect.value || "";
         });
       }
     </script>

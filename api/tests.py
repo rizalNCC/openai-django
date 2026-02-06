@@ -140,3 +140,35 @@ class AgentToolOutputTests(TestCase):
 
         self.assertIn("Result", body)
         self.assertIn("event: done", body)
+
+
+class AgentChatTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.agent = AgentProfile.objects.create(
+            name="Test Agent", model="gpt-4.1", system_prompt="Test"
+        )
+
+    @patch("api.views.openai.OpenAI")
+    def test_agent_chat_non_streaming(self, mock_openai):
+        response_obj = MagicMock()
+        response_obj.id = "resp_10"
+        response_obj.output = [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Hello there"}],
+            }
+        ]
+
+        mock_client = MagicMock()
+        mock_client.responses.create.return_value = response_obj
+        mock_openai.return_value = mock_client
+
+        response = self.client.post(
+            "/api/agent/chat/",
+            {"message": "Hi", "agent_id": self.agent.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["response"], "Hello there")
