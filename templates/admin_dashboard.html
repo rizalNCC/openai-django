@@ -102,6 +102,117 @@
       </section>
 
       <section class="card section-title">
+        <h2>Agents (CRUD)</h2>
+        <details>
+          <summary>Add Agent</summary>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_agent" />
+            {{ agent_form.non_field_errors }}
+            <label>
+              Name
+              {{ agent_form.name }}
+            </label>
+            <label>
+              Model
+              {{ agent_form.model }}
+            </label>
+            <label id="custom-model-label">
+              Custom Model
+              {{ agent_form.custom_model }}
+              <small>{{ agent_form.custom_model.help_text }}</small>
+            </label>
+            <label>
+              System Prompt
+              {{ agent_form.system_prompt }}
+            </label>
+            <label>
+              Default
+              {{ agent_form.is_default }}
+            </label>
+            <button type="submit">Create Agent</button>
+          </form>
+        </details>
+        {% if agents %}
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Model</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for agent in agents %}
+            <tr>
+              <td>{{ agent.id }}</td>
+              <td>{{ agent.name }}</td>
+              <td>{{ agent.model }}</td>
+              <td>{{ agent.updated_at }}</td>
+              <td>
+                <div class="inline-actions">
+                  <a href="/api/agents/{{ agent.id }}/">API</a>
+                  <a href="/admin/api/agentprofile/{{ agent.id }}/change/">Edit</a>
+                  <a href="/admin/api/agentprofile/{{ agent.id }}/delete/">Delete</a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No agents yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="card section-title">
+        <h2>Tools (CRUD)</h2>
+        <details>
+          <summary>Add Tool</summary>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_tool" />
+            {{ tool_form.as_p }}
+            <button type="submit">Create Tool</button>
+          </form>
+        </details>
+        {% if tools %}
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Active</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tool in tools %}
+            <tr>
+              <td>{{ tool.id }}</td>
+              <td>{{ tool.name }}</td>
+              <td>{{ tool.tool_type }}</td>
+              <td>{{ tool.is_active }}</td>
+              <td>
+                <div class="inline-actions">
+                  <a href="/api/tools/{{ tool.id }}/">API</a>
+                  <a href="/admin/api/agenttool/{{ tool.id }}/change/">Edit</a>
+                  <a href="/admin/api/agenttool/{{ tool.id }}/delete/">Delete</a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No tools yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="card section-title">
         <h2>Latest Sessions</h2>
         {% if recent_sessions %}
         <table>
@@ -129,5 +240,18 @@
         {% endif %}
       </section>
     </main>
+    <script>
+      const modelSelect = document.getElementById("id_agent-model");
+      const customLabel = document.getElementById("custom-model-label");
+      function toggleCustomModel() {
+        if (!modelSelect || !customLabel) return;
+        const isCustom = modelSelect.value === "__custom__";
+        customLabel.style.display = isCustom ? "block" : "none";
+      }
+      toggleCustomModel();
+      if (modelSelect) {
+        modelSelect.addEventListener("change", toggleCustomModel);
+      }
+    </script>
   </body>
 </html>

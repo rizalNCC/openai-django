@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Message Playground</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <style>
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      @media (max-width: 900px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .log {
+        height: 280px;
+        overflow: auto;
+        border: 1px solid var(--pico-muted-border-color);
+        padding: 0.75rem;
+        border-radius: 10px;
+        background: var(--pico-card-background-color);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <nav>
+        <ul>
+          <li><strong>Agent Playground</strong></li>
+        </ul>
+        <ul>
+          <li><a href="/dashboard/">Dashboard</a></li>
+          <li><a href="/swagger/">API Docs</a></li>
+        </ul>
+      </nav>
+
+      <section class="grid-2">
+        <article>
+          <h2>Send Message</h2>
+          <label>
+            Agent Profile
+            <select id="agentSelect">
+              <option value="">Default</option>
+              {% for agent in agents %}
+              <option value="{{ agent.id }}">{{ agent.name }} ({{ agent.model }})</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Agent ID (optional)
+            <input id="agentId" type="number" placeholder="1" />
+          </label>
+          <label>
+            Session ID (optional)
+            <input id="sessionId" type="number" placeholder="1" />
+          </label>
+          <label>
+            Auto Execute Tools
+            <input id="autoExec" type="checkbox" />
+          </label>
+          <label>
+            Message
+            <textarea id="message" rows="5" placeholder="Ask something..."></textarea>
+          </label>
+          <button id="sendBtn">Stream Response</button>
+          <small class="muted">Streams from `/api/agent/stream/`.</small>
+        </article>
+
+        <article>
+          <h2>Stream Output</h2>
+          <div class="log">
+            <pre id="textOutput"></pre>
+          </div>
+          <h3>Raw Events</h3>
+          <div class="log">
+            <pre id="eventOutput"></pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid-2">
+        <article>
+          <h2>Tool Output (Manual)</h2>
+          <label>
+            Session ID
+            <input id="toolSessionId" type="number" placeholder="1" />
+          </label>
+          <label>
+            Call ID
+            <input id="callId" type="text" placeholder="call_123" />
+          </label>
+          <label>
+            Output JSON/Text
+            <textarea id="toolOutput" rows="4" placeholder='{"result": "ok"}'></textarea>
+          </label>
+          <button id="toolBtn">Send Tool Output</button>
+          <small class="muted">Posts to `/api/agent/tool-output/`.</small>
+        </article>
+        <article>
+          <h2>Status</h2>
+          <div class="log">
+            <pre id="statusOutput"></pre>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script>
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+
+      function appendLine(el, line) {
+        el.textContent += line + "\n";
+        el.scrollTop = el.scrollHeight;
+      }
+
+      async function streamRequest(payload, endpoint) {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+          for (const part of parts) {
+            const lines = part.split("\n");
+            let eventType = "message";
+            let data = "";
+            for (const line of lines) {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                data += line.slice(5).trim();
+              }
+            }
+            handleEvent(eventType, data);
+          }
+        }
+      }
+
+      function handleEvent(type, data) {
+        const textOutput = document.getElementById("textOutput");
+        const eventOutput = document.getElementById("eventOutput");
+        const statusOutput = document.getElementById("statusOutput");
+
+        if (type === "text_delta") {
+          try {
+            const payload = JSON.parse(data);
+            textOutput.textContent += payload.delta || "";
+          } catch (e) {
+            textOutput.textContent += data;
+          }
+          textOutput.scrollTop = textOutput.scrollHeight;
+          return;
+        }
+
+        appendLine(eventOutput, `[${type}] ${data}`);
+
+        if (type === "done") {
+          appendLine(statusOutput, "Stream completed.");
+        }
+      }
+
+      document.getElementById("sendBtn").addEventListener("click", async () => {
+        document.getElementById("textOutput").textContent = "";
+        document.getElementById("eventOutput").textContent = "";
+        document.getElementById("statusOutput").textContent = "";
+
+        const payload = {
+          message: document.getElementById("message").value,
+        };
+        const agentIdInput = document.getElementById("agentId");
+        const agentSelect = document.getElementById("agentSelect");
+        const agentId = agentIdInput.value || agentSelect.value;
+        const sessionId = document.getElementById("sessionId").value;
+        const autoExec = document.getElementById("autoExec").checked;
+
+        if (agentId) payload.agent_id = Number(agentId);
+        if (sessionId) payload.session_id = Number(sessionId);
+        payload.auto_execute_tools = autoExec;
+
+        appendLine(document.getElementById("statusOutput"), "Streaming started...");
+        await streamRequest(payload, "/api/agent/stream/");
+      });
+
+      document.getElementById("toolBtn").addEventListener("click", async () => {
+        const payload = {
+          session_id: Number(document.getElementById("toolSessionId").value),
+          call_id: document.getElementById("callId").value,
+          output: document.getElementById("toolOutput").value,
+        };
+
+        document.getElementById("statusOutput").textContent = "";
+        appendLine(document.getElementById("statusOutput"), "Sending tool output...");
+        await streamRequest(payload, "/api/agent/tool-output/");
+      });
+
+      const agentSelect = document.getElementById("agentSelect");
+      const agentIdInput = document.getElementById("agentId");
+      if (agentSelect && agentIdInput) {
+        agentSelect.addEventListener("change", () => {
+          agentIdInput.value = agentSelect.value || "";
+        });
+      }
+    </script>
+  </body>
+</html>

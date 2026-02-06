@@ -51,6 +51,8 @@ docker compose run --rm django python manage.py test
 - **Web App**: http://localhost:8000
 - **Swagger UI**: http://localhost:8000/swagger/
 - **Redoc**: http://localhost:8000/redoc/
+- **Admin Dashboard**: http://localhost:8000/dashboard/
+- **Agent Playground**: http://localhost:8000/playground/
 
 ---
 
@@ -97,5 +99,9 @@ Request:
 ### Admin
 
 Use Django admin to manage agent profiles, tools, sessions, messages, and prompt templates.
+
+### Playground
+
+Use `/playground/` to simulate streaming requests and tool-output continuation without a separate frontend.
 
 ---
