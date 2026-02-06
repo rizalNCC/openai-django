@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import AgentProfile, AgentSession
+from .models import AgentMessage, AgentProfile, AgentSession
 from .tools import tool_registry
 
 
@@ -73,6 +73,7 @@ class AgentStreamTests(TestCase):
             return {"echo": args.get("text")}
 
         first_stream = [
+            {"type": "response.output_text.delta", "delta": "Hello "},
             {
                 "type": "response.output_item.added",
                 "item": {
@@ -108,6 +109,9 @@ class AgentStreamTests(TestCase):
 
         self.assertGreaterEqual(mock_client.responses.create.call_count, 2)
         self.assertIn("Done", body)
+        last_msg = AgentMessage.objects.filter(role="assistant").order_by("-id").first()
+        self.assertIsNotNone(last_msg)
+        self.assertEqual(last_msg.content, "Hello Done")
 
 
 class AgentToolOutputTests(TestCase):
@@ -172,3 +176,31 @@ class AgentChatTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["response"], "Hello there")
+
+    @patch("api.views.openai.OpenAI")
+    def test_agent_chat_returns_tool_calls(self, mock_openai):
+        response_obj = MagicMock()
+        response_obj.id = "resp_11"
+        response_obj.output = [
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "echo",
+                "arguments": "{\"text\": \"hi\"}",
+            }
+        ]
+
+        mock_client = MagicMock()
+        mock_client.responses.create.return_value = response_obj
+        mock_openai.return_value = mock_client
+
+        response = self.client.post(
+            "/api/agent/chat/",
+            {"message": "Hi", "agent_id": self.agent.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("tool_calls", payload)
+        self.assertEqual(payload["tool_calls"][0]["call_id"], "call_1")

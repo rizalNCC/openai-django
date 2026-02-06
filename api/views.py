@@ -157,6 +157,7 @@ class AgentStreamView(APIView):
 
         def event_stream() -> Iterable[str]:
             output_text_parts: List[str] = []
+            all_text_parts: List[str] = []
             completed_response: Optional[Dict[str, Any]] = None
             tool_calls: Dict[str, Dict[str, Any]] = {}
             max_rounds = 3
@@ -171,6 +172,7 @@ class AgentStreamView(APIView):
                         delta = event_dict.get("delta") or ""
                         if delta:
                             output_text_parts.append(delta)
+                            all_text_parts.append(delta)
                             yield _sse_event("text_delta", {"delta": delta})
 
                     if event_dict.get("type") == "response.output_item.added":
@@ -238,7 +240,7 @@ class AgentStreamView(APIView):
                 pending_inputs = tool_outputs
                 output_text_parts = []
 
-            final_text = "".join(output_text_parts).strip()
+            final_text = "".join(all_text_parts).strip()
             if final_text:
                 session.messages.create(role="assistant", content=final_text)
 
@@ -371,6 +373,17 @@ class AgentChatView(APIView):
                         if part.get("type") == "output_text":
                             output_text += part.get("text", "")
 
+        tool_calls = []
+        for item in normalized_output:
+            if item.get("type") == "function_call":
+                tool_calls.append(
+                    {
+                        "call_id": item.get("call_id"),
+                        "name": item.get("name"),
+                        "arguments": item.get("arguments"),
+                    }
+                )
+
         session.previous_response_id = getattr(response, "id", "") or ""
         session.last_output = normalized_output
         session.save(update_fields=["previous_response_id", "last_output", "updated_at"])
@@ -378,7 +391,7 @@ class AgentChatView(APIView):
         if output_text:
             session.messages.create(role="assistant", content=output_text)
 
-        return Response(
-            {"session_id": session.id, "response": output_text},
-            status=status.HTTP_200_OK,
-        )
+        payload = {"session_id": session.id, "response": output_text}
+        if tool_calls:
+            payload["tool_calls"] = tool_calls
+        return Response(payload, status=status.HTTP_200_OK)
