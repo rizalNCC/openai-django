@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Admin Dashboard</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    />
+    <style>
+      :root {
+        --card-radius: 14px;
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      @media (max-width: 900px) {
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        border-radius: var(--card-radius);
+        border: 1px solid var(--pico-muted-border-color);
+        padding: 1rem 1.25rem;
+        background: var(--pico-card-background-color);
+      }
+      .stat {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.25rem 0 0.5rem;
+      }
+      .muted {
+        color: var(--pico-muted-color);
+        font-size: 0.9rem;
+      }
+      .section-title {
+        margin: 1.5rem 0 0.5rem;
+      }
+      .inline-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <nav>
+        <ul>
+          <li><strong>Agent Admin</strong></li>
+        </ul>
+        <ul>
+          <li><a href="/admin/">Django Admin</a></li>
+          <li><a href="/swagger/">API Docs</a></li>
+        </ul>
+      </nav>
+
+      <section class="card">
+        <h1>Dashboard</h1>
+        <p class="muted">
+          Lightweight admin panel for agent operations. Built with PicoCSS.
+        </p>
+      </section>
+
+      <section class="grid-3 section-title">
+        <article class="card">
+          <div class="muted">Agents</div>
+          <div class="stat">{{ agent_count }}</div>
+          <div class="inline-actions">
+            <a href="/api/agents/">View API</a>
+            <a href="/admin/api/agentprofile/">Manage</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="muted">Tools</div>
+          <div class="stat">{{ tool_count }}</div>
+          <div class="inline-actions">
+            <a href="/api/tools/">View API</a>
+            <a href="/admin/api/agenttool/">Manage</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="muted">Sessions</div>
+          <div class="stat">{{ session_count }}</div>
+          <div class="inline-actions">
+            <a href="/admin/api/agentsession/">Manage</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="card section-title">
+        <h2>Quick Actions</h2>
+        <div class="inline-actions">
+          <a role="button" href="/admin/api/agentprofile/add/">New Agent</a>
+          <a role="button" href="/admin/api/agenttool/add/">New Tool</a>
+          <a role="button" href="/swagger/">Open Swagger</a>
+        </div>
+      </section>
+
+      <section class="card section-title">
+        <h2>Latest Sessions</h2>
+        {% if recent_sessions %}
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Agent</th>
+              <th>Owner</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in recent_sessions %}
+            <tr>
+              <td>{{ session.id }}</td>
+              <td>{{ session.agent.name }}</td>
+              <td>{{ session.owner|default:"-" }}</td>
+              <td>{{ session.updated_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No sessions yet.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
