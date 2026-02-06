@@ -27,12 +27,24 @@ This setup is suitable for:
 
 - **OpenAI Integration**: Ready to use `openai` python library.
 - **API Documentation**: Automated Swagger UI.
+- **Agent Profiles & Tools**: CRUD endpoints and Django admin to manage prompts, models, and tools.
+- **Streaming Agent API**: Server-Sent Events (SSE) streaming with tool-call handling.
 
 ## Usage
 
 ### Run Project
 ```bash
-docker-compose up
+docker compose up
+```
+
+### Run Migrations
+```bash
+docker compose run --rm django python manage.py migrate
+```
+
+### Run Tests
+```bash
+docker compose run --rm django python manage.py test
 ```
 
 ### Access
@@ -40,5 +52,50 @@ docker-compose up
 - **Swagger UI**: http://localhost:8000/swagger/
 - **Redoc**: http://localhost:8000/redoc/
 
+---
+
+## API Overview
+
+### Agent Streaming (SSE)
+
+POST `/api/agent/stream/`
+
+Request:
+```json
+{
+  "message": "Hello",
+  "agent_id": 1,
+  "session_id": 1,
+  "auto_execute_tools": false
+}
+```
+
+Response:
+- `text/event-stream` with events:
+  - `openai_event` (raw OpenAI streaming events)
+  - `text_delta` (convenience text chunks)
+  - `done` (includes `session_id`)
+
+### Tool Output Continuation (SSE)
+
+POST `/api/agent/tool-output/`
+
+Request:
+```json
+{
+  "session_id": 1,
+  "call_id": "call_123",
+  "output": "{\"result\": \"ok\"}"
+}
+```
+
+### CRUD Endpoints
+
+- Agent Profiles: `/api/agents/`
+- Agent Tools: `/api/tools/`
+
+### Admin
+
+Use Django admin to manage agent profiles, tools, sessions, messages, and prompt templates.
 
 ---
