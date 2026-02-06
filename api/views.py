@@ -9,7 +9,13 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AgentProfile, AgentProfileTool, AgentSession, AgentTool
+from .models import (
+    AgentProfile,
+    AgentProfileTool,
+    AgentPromptTemplate,
+    AgentSession,
+    AgentTool,
+)
 from .serializers import (
     AgentChatRequestSerializer,
     AgentProfileSerializer,
@@ -98,6 +104,24 @@ def _build_tools(agent: AgentProfile) -> list:
     return tool_defs
 
 
+def _build_instructions(agent: AgentProfile) -> Optional[str]:
+    base = (agent.system_prompt or "").strip()
+    templates = (
+        AgentPromptTemplate.objects.filter(agent=agent)
+        .order_by("-is_default", "id")
+        .values_list("template", flat=True)
+    )
+    if not templates:
+        templates = (
+            AgentPromptTemplate.objects.filter(agent__isnull=True)
+            .order_by("-is_default", "id")
+            .values_list("template", flat=True)
+        )
+    blocks = [b for b in [base, *templates] if b]
+    joined = "\n\n".join(blocks).strip()
+    return joined or None
+
+
 class AgentProfileViewSet(viewsets.ModelViewSet):
     queryset = AgentProfile.objects.all().order_by("id")
     serializer_class = AgentProfileSerializer
@@ -142,11 +166,12 @@ class AgentStreamView(APIView):
 
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         tools = _build_tools(agent)
+        instructions = _build_instructions(agent)
 
         def _run_stream(input_items: List[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
             response_stream = client.responses.create(
                 model=agent.model,
-                instructions=agent.system_prompt or None,
+                instructions=instructions,
                 input=input_items,
                 tools=tools,
                 previous_response_id=session.previous_response_id or None,
@@ -269,6 +294,7 @@ class AgentToolOutputView(APIView):
         agent = session.agent
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         tools = _build_tools(agent)
+        instructions = _build_instructions(agent)
 
         tool_output_item = {
             "type": "function_call_output",
@@ -278,7 +304,7 @@ class AgentToolOutputView(APIView):
 
         stream = client.responses.create(
             model=agent.model,
-            instructions=agent.system_prompt or None,
+            instructions=instructions,
             input=[tool_output_item],
             tools=tools,
             previous_response_id=session.previous_response_id or None,
@@ -353,10 +379,11 @@ class AgentChatView(APIView):
 
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
         tools = _build_tools(agent)
+        instructions = _build_instructions(agent)
 
         response = client.responses.create(
             model=agent.model,
-            instructions=agent.system_prompt or None,
+            instructions=instructions,
             input=[{"role": "user", "content": message}],
             tools=tools,
             previous_response_id=session.previous_response_id or None,

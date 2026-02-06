@@ -182,6 +182,11 @@ Use `/playground/` to simulate streaming requests and tool-output continuation w
 | `is_default` | Boolean | Default `false` |
 | `created_at` | DateTime | Auto |
 
+**Template scope behavior**
+- If `agent` is set, the template is scoped to that agent.
+- If `agent` is null, the template is **global** and can apply to all agents.
+- When building instructions, agent-scoped templates take priority; if none exist, global templates are used.
+
 #### `AgentSession`
 | Field | Type | Notes |
 |---|---|---|
