@@ -227,6 +227,16 @@
         appendLine(eventOutput, `[${type}] ${data}`);
 
         if (type === "done") {
+          try {
+            const payload = JSON.parse(data);
+            if (payload.session_id) {
+              const sessionInput = document.getElementById("sessionId");
+              const chatSessionInput = document.getElementById("chatSessionId");
+              sessionInput.value = payload.session_id;
+              chatSessionInput.value = payload.session_id;
+              localStorage.setItem("agent_session_id", payload.session_id);
+            }
+          } catch (e) {}
           appendLine(statusOutput, "Stream completed.");
         }
       }
@@ -290,6 +300,11 @@
           null,
           2
         );
+        if (data.session_id) {
+          document.getElementById("sessionId").value = data.session_id;
+          document.getElementById("chatSessionId").value = data.session_id;
+          localStorage.setItem("agent_session_id", data.session_id);
+        }
       });
 
       const agentSelect = document.getElementById("agentSelect");
@@ -305,6 +320,14 @@
         chatAgentSelect.addEventListener("change", () => {
           chatAgentIdInput.value = chatAgentSelect.value || "";
         });
+      }
+
+      const savedSession = localStorage.getItem("agent_session_id");
+      if (savedSession) {
+        const sessionInput = document.getElementById("sessionId");
+        const chatSessionInput = document.getElementById("chatSessionId");
+        sessionInput.value = savedSession;
+        chatSessionInput.value = savedSession;
       }
     </script>
   </body>
